@@ -1,0 +1,95 @@
+#include <RH_ASK.h>
+#include <SPI.h>
+RH_ASK driver (2000, 11, 12);
+
+int RPWM_Output = 5; // Arduino PWM output pin 5; connect to IBT-2 pin 1 (RPWM)
+int LPWM_Output = 6; // Arduino PWM output pin 6; connect to IBT-2 pin 2 (LPWM)
+char receivedSignal = "";
+bool latch = false;
+int latchValue = 0;
+float motorSpeed = 0;
+
+void setup() {
+  pinMode(RPWM_Output, OUTPUT);
+  pinMode(LPWM_Output, OUTPUT);
+ 
+  Serial.begin(9600);
+  if (!driver.init()) {
+    Serial.println("init failed");
+  }
+}
+
+void loop() {
+  //Receives signal from RF transmitter and stores value in variable
+  uint8_t buf[1];
+  uint8_t buflen = sizeof(buf);
+  if (driver.recv((uint8_t*)buf, &buflen)) {
+    receivedSignal = (char*)buf[0]; //stores received character for later comparison
+    Serial.println(receivedSignal);
+  }
+
+  //Motor control based on received signal
+
+  if (latch == false) {
+    if (receivedSignal == '0') {
+      motorSpeed = 0;
+      analogWrite(RPWM_Output, 0);
+      analogWrite(LPWM_Output, motorSpeed);
+    }
+
+    else if (receivedSignal == '1') {
+      for (int i=0; i<=210; i++) {
+        motorSpeed = motorSpeed + 1;
+        analogWrite(LPWM_Output, motorSpeed);
+        analogWrite(RPWM_Output, 0);
+        delay(1000/210);    
+      }
+     
+//      while (motorSpeed < 200) {
+//        analogWrite(LPWM_Output, motorSpeed);
+//        analogWrite(RPWM_Output, 0);
+//        motorSpeed = motorSpeed + 0.1;
+//      }
+      latch = true;
+      latchValue = 1;
+    }
+
+    if (receivedSignal == '2'){
+      for (int i = 0; i<=255; i++){
+        motorSpeed = motorSpeed + 1;
+        analogWrite(LPWM_Output, motorSpeed);
+        analogWrite(RPWM_Output, 0);
+        delay(1000/255);
+      }
+        
+//      while (motorSpeed < 255) {
+//        analogWrite(LPWM_Output, motorSpeed);
+//        analogWrite(RPWM_Output, 0);
+//        motorSpeed = motorSpeed + 0.1;
+//      }
+      latch = true;
+      latchValue = 2;
+    }
+  }
+
+  if (latch == true) {
+    if (latchValue == 1) {
+      analogWrite(LPWM_Output, 200);
+      analogWrite(RPWM_Output, 0);
+    }
+    if (latchValue == 2) {
+      analogWrite(LPWM_Output, 255);
+      analogWrite(RPWM_Output, 0);
+    }
+    if (receivedSignal == '3') {
+      while (motorSpeed > 0) {
+        analogWrite(LPWM_Output, motorSpeed);
+        analogWrite(RPWM_Output, 0);
+        motorSpeed = motorSpeed - 1;
+        delay(1000/255);
+      }
+      latchValue = 0;
+      latch = false;
+    }
+  }
+}
